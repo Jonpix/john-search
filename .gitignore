@@ -1,1 +1,46 @@
+# Root .gitignore for the workspace — tailored for Rust + 'rover' tooling
+# Keeps source under version control and ignores build artifacts, IDE files,
+# OS junk, and typical cache folders.
+
+# Rust / Cargo
+/target/
+**/target/
+
+# Cargo incremental and build outputs
+/debug/
+/release/
+/build/
+/deps/
+/incremental/
+
+# Compiled library files
+*.rlib
+*.rmeta
+*.so
+*.dylib
+*.dll
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Coverage / tests
+/coverage/
+
+# Rover tool caches (common patterns)
+.rover/
+.rover-cache/
+.rover-*
+
+# Misc
+CACHEDIR.TAG
 /target
