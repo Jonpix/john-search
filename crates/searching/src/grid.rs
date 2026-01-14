@@ -1,3 +1,5 @@
+#[derive(PartialEq)]
+pub enum Algorithms { Bfs , Dijkstra, AStarManhattan  }
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct Coord {
     pub x: isize,

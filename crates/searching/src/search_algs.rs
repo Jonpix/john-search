@@ -1,4 +1,4 @@
-use crate::grid::{Coord, Grid, ScoredCoord};
+use crate::grid::{Algorithms, Coord, Grid, ScoredCoord};
 use crate::path_result::PathResult;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 
@@ -135,6 +135,14 @@ pub fn a_star_manhattan(grid: &Grid, start: Coord, goal: Coord) -> Option<PathRe
 }
 pub fn dijkstra(grid: &Grid, start: Coord, goal: Coord) -> Option<PathResult> {
     shortest_path_with_heuristic(grid, start, goal, &zero_heuristic)
+}
+
+pub fn search(grid: &Grid, start: Coord, goal: Coord, alg: &Algorithms) -> Option<PathResult> {
+    match alg {
+        Algorithms::Bfs => bfs(grid, start, goal),
+        Algorithms::Dijkstra => dijkstra(grid, start, goal),
+        Algorithms::AStarManhattan => a_star_manhattan(grid, start, goal),
+    }
 }
 #[cfg(test)]
 mod tests {

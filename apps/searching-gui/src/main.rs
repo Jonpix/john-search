@@ -1,10 +1,10 @@
-use std::fmt::format;
 use eframe::egui;
 use eframe::epaint::StrokeKind;
-use searching::{bfs, CellType, Coord, Grid, PathResult};
-use std::time::{SystemTime, UNIX_EPOCH};
 use egui::Rect;
-use searching::search_algs::{a_star_manhattan, dijkstra};
+use searching::grid::Algorithms;
+use searching::search_algs::search;
+use searching::{CellType, Coord, Grid, PathResult};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const COLS: usize = 20;
 const ROWS: usize = 20;
@@ -13,7 +13,7 @@ fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1024.0, 768.0])
-            .with_title("Simple Grid"),
+            .with_title("Searching"),
         ..Default::default()
     };
 
@@ -30,7 +30,8 @@ struct App {
     group_one_value: Algorithms,
     path_result: PathResult,
     current_step_number: usize,
-
+    last_increment: Instant,
+    playing: bool,
 }
 
 impl App {
@@ -41,6 +42,8 @@ impl App {
             group_one_value: Algorithms::Bfs,
             grid: Grid::from_seed(178712312973918, COLS, ROWS, 30, 20),
             path_result: PathResult::empty(),
+            last_increment: Instant::now(),
+            playing: false,
         }
     }
 
@@ -67,7 +70,7 @@ impl App {
         )
     }
 
-    fn get_bread_crumb_rect(rect: Rect, col: usize, row: usize, cell: f32) -> Rect{
+    fn get_bread_crumb_rect(rect: Rect, cell: f32) -> Rect{
         Rect::from_min_size(
             egui::pos2(
                 rect.left() + cell / 4.0,
@@ -81,7 +84,6 @@ impl App {
         egui::Frame::new()
             .inner_margin(egui::Margin::same(2))
             .show(ui, |ui| {
-                // Reserve a rect sized to an integer number of cells
                 let available = ui.available_size();
                 let cell = (available.x / COLS as f32)
                     .min(available.y / ROWS as f32)
@@ -91,12 +93,10 @@ impl App {
                 let grid_size = egui::vec2(cell * COLS as f32, cell * ROWS as f32);
                 let (rect, _) = ui.allocate_exact_size(grid_size, egui::Sense::hover());
 
-                // Reuse painter and stroke
                 let painter = ui.painter().clone();
                 let stroke = egui::Stroke::new(1.0, egui::Color32::BLACK);
                 let path: &[Coord] = self.path_result.path();
                 let expanded: &[Coord] = self.path_result.expanded_order();
-
 
                 for row in 0..ROWS {
                     for col in 0..COLS {
@@ -111,11 +111,12 @@ impl App {
                         let coord = Coord { x: col as isize, y: row as isize };
                         let coord_index = expanded.iter().position(|c| c == &coord).unwrap_or(expanded.len());
                         if self.current_step_number >= coord_index && path.contains(&coord) {
-                            let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, col, row, cell);
-                            color = egui::Color32::CYAN;
+                            let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, cell);
+                            color = egui::Color32::from_rgba_unmultiplied(242, 172, 250, 128);
+                            painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                             painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                         } else if self.current_step_number >= coord_index && expanded.contains(&Coord { x: col as isize, y: row as isize }) {
-                            let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, col, row, cell);
+                            let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, cell);
                             color = egui::Color32::from_rgba_unmultiplied(206, 227, 20, 128);
                             painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                         }
@@ -128,11 +129,20 @@ impl App {
             });
     }
 }
-#[derive(PartialEq)]
-enum Algorithms { Bfs , Dijkstra, AStarManhattan  }
+
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.playing {
+            ctx.request_repaint_after(Duration::from_millis(10));
+        }
+        if self.playing && self.last_increment.elapsed() >= Duration::from_millis(25) {
+            self.current_step_number += 1;
+            if self.current_step_number > self.path_result.expanded_order().len() {
+                self.playing = false;
+            }
+            self.last_increment = Instant::now();
+        }
         egui::SidePanel::left("left_panel").show(ctx, |ui| {
             ui.vertical(|ui| {
                 ui.label("Algorithm");
@@ -150,20 +160,17 @@ impl eframe::App for App {
                 ui.label("Actions");
 
                 ui.horizontal(|ui| {
-                    if ui.button("Search").clicked(){
-                        self.current_step_number = 0;
-                        self.path_result = match self.group_one_value {
-                            Algorithms::Dijkstra => { dijkstra(&self.grid, self.grid.get_start(), self.grid.get_finish()).unwrap_or( PathResult::empty()) },
-                            Algorithms::Bfs => { bfs(&self.grid, self.grid.get_start(), self.grid.get_finish()).unwrap_or( PathResult::empty())}
-                            Algorithms::AStarManhattan => {a_star_manhattan(&self.grid, self.grid.get_start(), self.grid.get_finish()).unwrap_or( PathResult::empty())}
-                        };
+                    if ui.button("Search").clicked() {
+                        self.path_result = search(&self.grid, self.grid.get_start(), self.grid.get_finish(), &self.group_one_value).unwrap_or(PathResult::empty());
+                        self.current_step_number = self.path_result.expanded_order().len();
                     }
+
                     if ui.button("Reset Grid").clicked(){
                         self.path_result = PathResult::empty();
                         self.current_step_number = 0;
                         let now = SystemTime::now();
                         let since_epoch = now.duration_since(UNIX_EPOCH).unwrap();
-                        let seed: u64 = since_epoch.as_nanos() as u64; // Or use as_secs() for seconds
+                        let seed: u64 = since_epoch.as_nanos() as u64;
                         self.grid = Grid::from_seed(seed, COLS, ROWS, 10, 20);
                     }
                     if ui.button("Clear Grid").clicked(){
@@ -189,11 +196,14 @@ impl eframe::App for App {
                                 self.current_step_number += 1;
                             }
                         }
+
+                        if ui.button("Play").clicked() {
+                            self.current_step_number = 0;
+                            self.playing = true;
+                        }
                     });
                 }
             });
-        });
-        egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
         });
         egui::CentralPanel::default().show(ctx, |ui| {
             self.draw_grid(ui);
