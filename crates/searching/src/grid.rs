@@ -58,6 +58,7 @@ pub struct Grid {
     pub width: usize,
     pub height: usize,
     pub cells: Vec<Cell>,
+    pub allow_diagonal: bool,
 }
 
 use rand::{SeedableRng, Rng};
@@ -69,6 +70,7 @@ impl Grid {
         height: usize,
         mud_pct: u8,   // 0..=100
         wall_pct: u8,  // 0..=100
+        allow_diagonal: bool
     ) -> Self {
         assert!(width > 0 && height > 0);
         assert!(mud_pct + wall_pct <= 100, "mud + wall density must be ≤ 100");
@@ -84,13 +86,16 @@ impl Grid {
                 _ => Cell { cell_type: CellType::Normal },
             };
         }
-
-        // Force start and finish
-        cells[0].cell_type = CellType::Start;
         let last_index = cells.len() - 1;
-        cells[last_index].cell_type = CellType::Finish;
+        let starting_index = rng.random_range(0..last_index);
+        let mut finishing_index = rng.random_range(0..last_index);
 
-        Self { width, height, cells }
+        while starting_index == finishing_index {
+            finishing_index = rng.random_range(0..starting_index);
+        }
+        cells[starting_index].cell_type = CellType::Start;
+        cells[finishing_index].cell_type = CellType::Finish;
+        Self { width, height, cells, allow_diagonal }
     }
 
     pub fn get_start(&self) -> Coord {
@@ -148,19 +153,38 @@ impl Grid {
         false
     }
 
-    pub fn neighbors4(&self, c: Coord) -> impl Iterator<Item = Coord> + '_ {
+    
+    fn neighbors4(&self, c: Coord) -> impl Iterator<Item = Coord> + '_ {
         let offsets: [(isize, isize); 4] = [(-1, 0), (1, 0), (0, -1), (0, 1)];
         offsets.into_iter().filter_map(move |offset| {
-            let x = offset.0 + c.x;
-            let y = offset.1 + c.y;
-            let candidate = Coord { x, y };
-
-            if self.passable(candidate) {
-                Some(candidate)
-            } else {
-                None
-            }
+            self.get_neighbor(c, offset)
         })
+    }
+    fn neighbors8(&self, c: Coord) -> impl Iterator<Item = Coord> + '_ {
+        let offsets: [(isize, isize); 8] = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)];
+        offsets.into_iter().filter_map(move |offset| {
+            self.get_neighbor(c, offset)
+        })
+    }
+
+    fn get_neighbor(&self, c: Coord, offset: (isize, isize)) -> Option<Coord> {
+        let x = offset.0 + c.x;
+        let y = offset.1 + c.y;
+        let candidate = Coord { x, y };
+
+        if self.passable(candidate) {
+            Some(candidate)
+        } else {
+            None
+        }
+    }
+
+    pub fn neighbors(&self, c: Coord) -> Box<dyn Iterator<Item=Coord> + '_> {
+        if self.allow_diagonal {
+            Box::new(self.neighbors8(c))
+        } else {
+            Box::new(self.neighbors4(c))
+        }
     }
 }
 
@@ -195,6 +219,7 @@ mod tests {
             width,
             height,
             cells,
+            allow_diagonal: false
         }
     }
 
@@ -222,7 +247,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 0, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors4(c).collect();
+        let neighbors: Vec<_> = grid.neighbors(c).collect();
 
         assert_eq!(neighbors.len(), 2);
         assert!(neighbors.contains(&Coord { x: 1, y: 0 }));
@@ -234,7 +259,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 1, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors4(c).collect();
+        let neighbors: Vec<_> = grid.neighbors(c).collect();
 
         assert_eq!(neighbors.len(), 3);
         assert!(neighbors.contains(&Coord { x: 0, y: 0 }));
@@ -247,7 +272,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 1, y: 1 };
 
-        let neighbors: Vec<_> = grid.neighbors4(c).collect();
+        let neighbors: Vec<_> = grid.neighbors(c).collect();
 
         assert_eq!(neighbors.len(), 4);
     }
@@ -263,7 +288,7 @@ mod tests {
         );
         let c = Coord { x: 0, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors4(c).collect();
+        let neighbors: Vec<_> = grid.neighbors(c).collect();
 
         assert_eq!(neighbors.len(), 1);
         assert_eq!(neighbors[0], Coord { x: 0, y: 1 });

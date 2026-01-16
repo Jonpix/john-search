@@ -4,7 +4,7 @@ use searching::{bfs, Grid};
 fn main() {
     for i in 800..1000 {
         let seed = i as u64;
-        let grid = Grid::from_seed(seed, 50, 10, 30, 20);
+        let grid = Grid::from_seed(seed, 50, 10, 30, 20, false);
         let start = grid.get_start();
         let finish = grid.get_finish();
         let bfs_result = bfs(&grid, start, finish);

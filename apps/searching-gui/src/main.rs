@@ -32,6 +32,7 @@ struct App {
     current_step_number: usize,
     last_increment: Instant,
     playing: bool,
+    allow_diagonal: bool,
 }
 
 impl App {
@@ -40,10 +41,11 @@ impl App {
             current_step_number: 0,
             selected_cell_type: CellType::Normal,
             group_one_value: Algorithms::Bfs,
-            grid: Grid::from_seed(178712312973918, COLS, ROWS, 30, 20),
+            grid: Grid::from_seed(178712312973918, COLS, ROWS, 30, 20, false),
             path_result: PathResult::empty(),
             last_increment: Instant::now(),
             playing: false,
+            allow_diagonal: false
         }
     }
 
@@ -110,14 +112,20 @@ impl App {
                         painter.rect_stroke(cell_rect, 0.0, stroke, StrokeKind::Inside);
                         let coord = Coord { x: col as isize, y: row as isize };
                         let coord_index = expanded.iter().position(|c| c == &coord).unwrap_or(expanded.len());
+                        let mut opacity = 124;
+                        if self.current_step_number < coord_index + 20 {
+                            opacity = 254;
+                        }
                         if self.current_step_number >= coord_index && path.contains(&coord) {
                             let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, cell);
-                            color = egui::Color32::from_rgba_unmultiplied(242, 172, 250, 128);
+
+                            color = egui::Color32::from_rgba_unmultiplied(242, 172, 250, opacity as u8);
                             painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                             painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                         } else if self.current_step_number >= coord_index && expanded.contains(&Coord { x: col as isize, y: row as isize }) {
+
                             let bread_crumb_rect = Self::get_bread_crumb_rect(cell_rect, cell);
-                            color = egui::Color32::from_rgba_unmultiplied(206, 227, 20, 128);
+                            color = egui::Color32::from_rgba_unmultiplied(206, 227, 20, opacity as u8);
                             painter.circle_filled(bread_crumb_rect.center(), bread_crumb_rect.width() / 2.0, color);
                         }
 
@@ -156,6 +164,9 @@ impl eframe::App for App {
                 ui.radio_value(&mut self.selected_cell_type, CellType::Normal, "Normal");
                 ui.radio_value(&mut self.selected_cell_type, CellType::Wall, "Wall");
                 ui.radio_value(&mut self.selected_cell_type, CellType::Mud, "Mud");
+                if ui.checkbox(&mut self.allow_diagonal, "Allow Diagonal").changed() {
+                    self.grid.allow_diagonal = self.allow_diagonal;
+                }
                 ui.separator();
                 ui.label("Actions");
 
@@ -171,7 +182,7 @@ impl eframe::App for App {
                         let now = SystemTime::now();
                         let since_epoch = now.duration_since(UNIX_EPOCH).unwrap();
                         let seed: u64 = since_epoch.as_nanos() as u64;
-                        self.grid = Grid::from_seed(seed, COLS, ROWS, 10, 20);
+                        self.grid = Grid::from_seed(seed, COLS, ROWS, 10, 20, self.allow_diagonal);
                     }
                     if ui.button("Clear Grid").clicked(){
                         self.path_result = PathResult::empty();
@@ -184,24 +195,17 @@ impl eframe::App for App {
                 });
                 if !self.path_result.path().is_empty() {
                     ui.separator();
+                    ui.add(egui::Slider::new(&mut self.current_step_number, 0..=self.path_result.expanded_order().len()));
                     ui.horizontal(|ui| {
-                        if ui.button("Prev").clicked(){
-                            if self.current_step_number > 0 {
-                                self.current_step_number -= 1;
-                            }
-                        }
-                        ui.label(format!("Step {}", self.current_step_number + 1));
-                        if ui.button("Next").clicked(){
-                            if self.current_step_number < self.path_result.expanded_order().len() {
-                                self.current_step_number += 1;
-                            }
-                        }
-
                         if ui.button("Play").clicked() {
                             self.current_step_number = 0;
                             self.playing = true;
                         }
                     });
+                    ui.label(format!("Steps: {}", self.path_result.expanded_order().len()));
+                    ui.label(format!("frontier: {}", self.path_result.max_frontier()));
+                    ui.label(format!("expanded: {}", self.path_result.expanded_order().len()));
+                    ui.label(format!("cost: {}", self.path_result.total_cost()));
                 }
             });
         });

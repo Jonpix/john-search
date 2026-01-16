@@ -2,6 +2,30 @@ use crate::grid::{Algorithms, Coord, Grid, ScoredCoord};
 use crate::path_result::PathResult;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 
+pub fn chebyshev_heuristic(start: Coord, goal: Coord) -> usize {
+    let dx = start.x.abs_diff(goal.x);
+    let dy = start.y.abs_diff(goal.y);
+
+    // Movement model:
+    // - Orthogonal move cost = 1
+    // - Diagonal move cost   = 1
+    //
+    // With equal costs, the shortest path is:
+    // - move diagonally as much as possible
+    // - then finish with straight moves
+    //
+    // Total cost = max(dx, dy)
+
+    let straight_move_cost = 1;
+    let diagonal_move_cost = 1;
+
+    let diagonal_steps = dx.min(dy);
+    let straight_steps = dx.max(dy) - diagonal_steps;
+
+    diagonal_steps * diagonal_move_cost
+        + straight_steps * straight_move_cost
+}
+
 pub fn manhattan_heuristic(start: Coord, finish: Coord) -> usize {
     ((start.x - finish.x).abs() + (start.y - finish.y).abs()) as usize
 }
@@ -24,7 +48,7 @@ pub fn bfs(grid: &Grid, start: Coord, goal: Coord) -> Option<PathResult> {
         if next_node == goal {
             break;
         }
-        for node in grid.neighbors4(next_node) {
+        for node in grid.neighbors(next_node) {
             if came_from.contains_key(&node) {
                 continue;
             }
@@ -91,7 +115,7 @@ pub fn shortest_path_with_heuristic(grid: &Grid, start: Coord, goal: Coord, h: &
             break;
         }
 
-        for neighbor in grid.neighbors4(current) {
+        for neighbor in grid.neighbors(current) {
             let new_cost = best_known + grid.get_cell_value(neighbor);
             let is_better = match dist.get(&neighbor) {
                 None => true,
@@ -176,7 +200,7 @@ mod tests {
             cells[idx(c)].cell_type = CellType::Mud;
         }
 
-        Grid { width, height, cells }
+        Grid { width, height, cells, allow_diagonal: false }
     }
 
     fn grid_with(
@@ -219,6 +243,7 @@ mod tests {
             width,
             height,
             cells,
+            allow_diagonal: false,
         }
     }
 
@@ -318,7 +343,7 @@ mod tests {
             let a = pair[0];
             let b = pair[1];
             assert!(
-                grid.neighbors4(a).any(|n| n == b),
+                grid.neighbors(a).any(|n| n == b),
                 "invalid step {:?} -> {:?}",
                 a,
                 b
