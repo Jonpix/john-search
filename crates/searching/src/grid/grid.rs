@@ -1,59 +1,7 @@
-#[derive(PartialEq)]
-pub enum Algorithms { Bfs , Dijkstra, AStarManhattan  }
-#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-pub struct Coord {
-    pub x: isize,
-    pub y: isize,
-}
-#[derive(Copy, Clone, Eq, PartialEq)]
-pub struct ScoredCoord {
-    pub coord: Coord,
-    pub actual_cost: usize,
-    pub estimated_total_cost: usize,
-}
-
-impl ScoredCoord {
-    pub(crate) fn new(coord: Coord, actual_cost: usize, estimated_total_cost: usize) -> Self {
-        Self { coord, actual_cost, estimated_total_cost }
-    }
-}
-impl Ord for ScoredCoord {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other
-            .estimated_total_cost
-            .cmp(&self.estimated_total_cost)
-            .then_with(|| self.coord.y.cmp(&other.coord.y))
-            .then_with(|| self.coord.x.cmp(&other.coord.x))
-    }
-}
-
-impl PartialOrd for ScoredCoord {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum CellType {
-    Start,
-    Finish,
-    Wall,
-    Normal,
-    Mud,
-}
-
-impl CellType {
-    fn value(&self) -> usize {
-        match self {
-            CellType::Mud => 2,
-            _ => 1
-        }
-    }
-}
-#[derive(Clone)]
-pub struct Cell {
-    pub cell_type: CellType,
-}
+use rand::{SeedableRng, Rng};
+use rand::rngs::StdRng;
+pub use crate::grid::types::{Cell, CellType, Coord};
+use crate::grid::utils::{coord_from_index, in_bounds, index_from_coord};
 pub struct Grid {
     pub width: usize,
     pub height: usize,
@@ -61,8 +9,6 @@ pub struct Grid {
     pub allow_diagonal: bool,
 }
 
-use rand::{SeedableRng, Rng};
-use rand::rngs::StdRng;
 impl Grid {
     pub fn from_seed(
         seed: u64,
@@ -100,47 +46,24 @@ impl Grid {
 
     pub fn get_start(&self) -> Coord {
         let index = self.cells.iter().position(|cell| cell.cell_type == CellType::Start).unwrap();
-        self.coord_from_index(index)
+        coord_from_index(index, self.width)
     }
     pub fn get_finish(&self) -> Coord {
         let index = self.cells.iter().position(|cell| cell.cell_type == CellType::Finish).unwrap();
-        self.coord_from_index(index)
-    }
-
-    pub(crate) fn index_from_coord(&self, c: Coord) -> usize {
-        assert!(self.in_bounds(c));
-        (c.y * (self.width as isize) + c.x) as usize
-    }
-    fn coord_from_index(&self, idx: usize) -> Coord {
-        let x = idx % self.width;
-        let y = idx / self.width;
-        Coord {
-            x: x as isize,
-            y: y as isize,
-        }
-    }
-    fn in_bounds(&self, c: Coord) -> bool {
-        if c.x >= self.width as isize || c.x < 0 {
-            return false;
-        }
-
-        if c.y >= self.height as isize || c.y < 0 {
-            return false;
-        }
-        true
+        coord_from_index(index, self.width)
     }
 
     pub fn get_cell_value(&self, c: Coord) -> usize {
-        assert!(self.in_bounds(c));
-        let index = self.index_from_coord(c);
+        assert!(in_bounds(c, self.width as isize, self.height as isize));
+        let index = index_from_coord(c, self.width as isize, self.height as isize);
         self.cells.get(index).unwrap().cell_type.value()
     }
     fn passable(&self, c: Coord) -> bool {
-        if !self.in_bounds(c) {
+        if !in_bounds(c, self.width as isize, self.height as isize) {
             return false;
         }
 
-        let optional_cell = self.cells.get(self.index_from_coord(c));
+        let optional_cell = self.cells.get(index_from_coord(c, self.width as isize, self.height as isize));
         if let Some(cell) = optional_cell {
             return match cell.cell_type {
                 CellType::Start => true,
@@ -179,7 +102,7 @@ impl Grid {
         }
     }
 
-    pub fn neighbors(&self, c: Coord) -> Box<dyn Iterator<Item=Coord> + '_> {
+    pub fn neighbors_for_pathfinding(&self, c: Coord) -> Box<dyn Iterator<Item=Coord> + '_> {
         if self.allow_diagonal {
             Box::new(self.neighbors8(c))
         } else {
@@ -236,8 +159,8 @@ mod tests {
         ];
 
         for &c in &coords {
-            let idx = grid.index_from_coord(c);
-            let back = grid.coord_from_index(idx);
+            let idx = index_from_coord(c, grid.width as isize, grid.height as isize);
+            let back = coord_from_index(idx, grid.width);
             assert_eq!(c, back);
         }
     }
@@ -247,7 +170,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 0, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors(c).collect();
+        let neighbors: Vec<_> = grid.neighbors_for_pathfinding(c).collect();
 
         assert_eq!(neighbors.len(), 2);
         assert!(neighbors.contains(&Coord { x: 1, y: 0 }));
@@ -259,7 +182,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 1, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors(c).collect();
+        let neighbors: Vec<_> = grid.neighbors_for_pathfinding(c).collect();
 
         assert_eq!(neighbors.len(), 3);
         assert!(neighbors.contains(&Coord { x: 0, y: 0 }));
@@ -272,7 +195,7 @@ mod tests {
         let grid = grid_with(3, 3, Coord { x: 0, y: 0 }, Coord { x: 2, y: 2 }, &[]);
         let c = Coord { x: 1, y: 1 };
 
-        let neighbors: Vec<_> = grid.neighbors(c).collect();
+        let neighbors: Vec<_> = grid.neighbors_for_pathfinding(c).collect();
 
         assert_eq!(neighbors.len(), 4);
     }
@@ -288,7 +211,7 @@ mod tests {
         );
         let c = Coord { x: 0, y: 0 };
 
-        let neighbors: Vec<_> = grid.neighbors(c).collect();
+        let neighbors: Vec<_> = grid.neighbors_for_pathfinding(c).collect();
 
         assert_eq!(neighbors.len(), 1);
         assert_eq!(neighbors[0], Coord { x: 0, y: 1 });

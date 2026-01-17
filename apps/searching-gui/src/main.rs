@@ -1,10 +1,15 @@
 use eframe::egui;
 use eframe::epaint::StrokeKind;
 use egui::Rect;
-use searching::grid::Algorithms;
-use searching::search_algs::search;
-use searching::{CellType, Coord, Grid, PathResult};
+use searching::search::a_star::a_star_manhattan;
+use searching::search::bfs::bfs;
+use searching::search::dijkstra::dijkstra;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use searching::grid::grid::{ CellType, Coord, Grid};
+use searching::PathResult;
+
+#[derive(PartialEq)]
+pub enum Algorithms { Bfs , Dijkstra, AStarManhattan }
 
 const COLS: usize = 20;
 const ROWS: usize = 20;
@@ -81,7 +86,6 @@ impl App {
             egui::vec2(cell / 2.0, cell / 2.0),
         )
     }
-    
     fn draw_grid(&mut self, ui: &mut egui::Ui) {
         egui::Frame::new()
             .inner_margin(egui::Margin::same(2))
@@ -110,6 +114,42 @@ impl App {
 
                         painter.rect_filled(cell_rect, 0.0, color);
                         painter.rect_stroke(cell_rect, 0.0, stroke, StrokeKind::Inside);
+
+                        //let wall_stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
+                        //let inset = 1.0;
+
+                        // painter.line_segment(
+                        //     [
+                        //         egui::pos2(cell_rect.left() + inset, cell_rect.top() + inset),
+                        //         egui::pos2(cell_rect.left() + inset, cell_rect.bottom() - inset),
+                        //     ],
+                        //     wall_stroke,
+                        // );
+                        //
+                        // painter.line_segment(
+                        //     [
+                        //         egui::pos2(cell_rect.right() - inset, cell_rect.top() + inset),
+                        //         egui::pos2(cell_rect.right() - inset, cell_rect.bottom() - inset),
+                        //     ],
+                        //     wall_stroke,
+                        // );
+                        //
+                        // painter.line_segment(
+                        //     [
+                        //         egui::pos2(cell_rect.left() + inset, cell_rect.bottom() - inset),
+                        //         egui::pos2(cell_rect.right() - inset, cell_rect.bottom() - inset),
+                        //     ],
+                        //     wall_stroke,
+                        // );
+                        //
+                        // painter.line_segment(
+                        //     [
+                        //         egui::pos2(cell_rect.left() + inset, cell_rect.top() + inset),
+                        //         egui::pos2(cell_rect.right() - inset, cell_rect.top() + inset),
+                        //     ],
+                        //     wall_stroke,
+                        // );
+
                         let coord = Coord { x: col as isize, y: row as isize };
                         let coord_index = expanded.iter().position(|c| c == &coord).unwrap_or(expanded.len());
                         let mut opacity = 124;
@@ -213,4 +253,13 @@ impl eframe::App for App {
             self.draw_grid(ui);
         });
     }
+
 }
+fn search(grid: &Grid, start: Coord, goal: Coord, alg: &Algorithms) -> Option<PathResult> {
+    match alg {
+        Algorithms::Bfs => bfs(grid, start, goal),
+        Algorithms::Dijkstra => dijkstra(grid, start, goal),
+        Algorithms::AStarManhattan => a_star_manhattan(grid, start, goal),
+    }
+}
+

@@ -1,7 +1,9 @@
 pub mod grid;
-pub mod search_algs;
-pub mod path_result;
+pub mod search;
+pub mod path;
+pub mod test_support;
 
-pub use grid::{CellType, Coord, Grid};
-pub use search_algs::{bfs, shortest_path_with_heuristic};
-pub use path_result::PathResult;
+// Re-exports for a clean public API
+pub use grid::{CellType, Coord, Cell, Grid};
+pub use path::PathResult;
+pub use search::{bfs, dijkstra, a_star_manhattan, shortest_path_with_heuristic};

@@ -1,4 +1,4 @@
-use crate::grid::Coord;
+use crate::grid::types::Coord;
 
 #[derive(Debug, Clone)]
 pub struct PathResult {
